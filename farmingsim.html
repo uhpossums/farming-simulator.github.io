@@ -16,7 +16,7 @@ body {
 }
 
 /* Buttons */
-#upgradesButton, #levelUpButton, #saveButton {
+#upgradesButton, #levelUpButton, #saveButton, #resetButton {
   position: absolute;
   padding: 8px 12px;
   background-color: #fff;
@@ -28,10 +28,12 @@ body {
 #upgradesButton { top: 40px; right: 20px; }
 #levelUpButton { top: 80px; right: 20px; }
 #saveButton { top: 120px; right: 20px; }
+#resetButton { top: 160px; right: 20px; }
 
+/* Upgrades Menu */
 #upgradesMenu {
   position: absolute;
-  top: 160px;
+  top: 200px;
   right: 20px;
   background-color: #fff;
   border: 2px solid #000;
@@ -41,6 +43,7 @@ body {
   z-index: 10;
   display: flex;
   justify-content: space-between;
+  flex-wrap: wrap;
 }
 
 .upgrade-column { width: 45%; }
@@ -49,6 +52,29 @@ body {
 .upgrade-item:hover { background-color: #eee; }
 .buy-max { font-size: 12px; margin-left: 4px; cursor: pointer; color: blue; }
 .maxed { color: red; font-weight: bold; margin-left: 4px; }
+
+/* Joystick */
+#joystickOuter {
+  position: absolute;
+  bottom: 40px;
+  left: 40px;
+  width: 120px;
+  height: 120px;
+  background-color: rgba(0,0,0,0.2);
+  border-radius: 50%;
+  touch-action: none;
+  z-index: 20;
+}
+#joystickInner {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 60px;
+  height: 60px;
+  background-color: rgba(0,0,0,0.5);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
 </style>
 </head>
 <body>
@@ -58,7 +84,9 @@ body {
 <div id="upgradesButton">Upgrades</div>
 <div id="levelUpButton"></div>
 <div id="saveButton">Save</div>
+<div id="resetButton">Reset</div>
 
+<!-- Upgrades Menu -->
 <div id="upgradesMenu">
   <div class="upgrade-column" id="cropUpgrades">
     <div class="upgrade-category">Crop Upgrades</div>
@@ -70,6 +98,11 @@ body {
     <div class="upgrade-item" id="fasterMovement">Faster Movement ($50) - Level 0 <span class="buy-max">(Buy Max)</span></div>
     <div class="upgrade-item" id="moreMoney">More Money per Wheat ($50) - Level 0 <span class="buy-max">(Buy Max)</span></div>
   </div>
+</div>
+
+<!-- Mobile Joystick -->
+<div id="joystickOuter">
+  <div id="joystickInner"></div>
 </div>
 
 <script>
@@ -123,6 +156,9 @@ const upgradesButton = document.getElementById('upgradesButton');
 const upgradesMenu = document.getElementById('upgradesMenu');
 const levelUpButton = document.getElementById('levelUpButton');
 const saveButton = document.getElementById('saveButton');
+const resetButton = document.getElementById('resetButton');
+
+// --- Functions ---
 
 // Update Level Up Crop button text
 function updateLevelUpButton(){
@@ -143,16 +179,16 @@ upgradesButton.addEventListener('click', ()=> {
 // Helper to update upgrade text
 function updateUpgradeText(id, level, max=false){
   const el = document.getElementById(id);
-  el.textContent = el.textContent.split(' - ')[0]+` - Level ${level} `;
-  el.innerHTML += max?' <span class="maxed">(MAX)</span>':'<span class="buy-max">(Buy Max)</span>';
+  const name = el.textContent.split(' - ')[0];
+  el.innerHTML = `${name} - Level ${level} ${max ? '<span class="maxed">(MAX)</span>' : '<span class="buy-max">(Buy Max)</span>'}`;
 }
 
 // Buy Max helper
 function buyMax(upgrade, cost, applyFunc, id, maxLevel=Infinity){
   while(money>=cost && upgradeLevels[upgrade]<maxLevel){
-    money -= cost;
     applyFunc();
     upgradeLevels[upgrade]++;
+    money -= cost;
     updateUpgradeText(id, upgradeLevels[upgrade], upgradeLevels[upgrade]===maxLevel);
   }
 }
@@ -160,7 +196,7 @@ function buyMax(upgrade, cost, applyFunc, id, maxLevel=Infinity){
 // Upgrade click handlers
 document.getElementById('fasterGrowth').addEventListener('click', ()=>buyMax('fasterGrowth',50,()=>growTime=Math.max(500,growTime-500),'fasterGrowth'));
 document.getElementById('higherYield').addEventListener('click', ()=>buyMax('higherYield',50,()=>wheatYield+=1,'higherYield'));
-document.getElementById('fasterMovement').addEventListener('click', ()=>buyMax('fasterMovement',50,()=>player.speed+=1,'fasterMovement',5)); // capped at 5
+document.getElementById('fasterMovement').addEventListener('click', ()=>buyMax('fasterMovement',50,()=>player.speed=Math.min(player.speed+1,10),'fasterMovement',5));
 document.getElementById('moreMoney').addEventListener('click', ()=>buyMax('moreMoney',50,()=>wheatYield+=1,'moreMoney'));
 
 // Level Up Crop button
@@ -174,7 +210,7 @@ levelUpButton.addEventListener('click', ()=> {
   }
 });
 
-// Save game state function
+// Save game
 function saveGame() {
   const gameState = {
     money,
@@ -187,8 +223,9 @@ function saveGame() {
   localStorage.setItem('farmingSimSave', JSON.stringify(gameState));
   alert('Game saved!');
 }
+saveButton.addEventListener('click', saveGame);
 
-// Load game state function
+// Load saved game
 function loadGame() {
   const saved = localStorage.getItem('farmingSimSave');
   if (saved) {
@@ -200,28 +237,83 @@ function loadGame() {
     wheatYield = state.wheatYield;
     player.speed = state.playerSpeed;
     updateLevelUpButton();
-    // Update upgrade UI to match saved levels
-    for (const id in upgradeLevels) {
+    for(const id in upgradeLevels){
       updateUpgradeText(id, upgradeLevels[id]);
     }
   }
 }
-
-// Save button click
-saveButton.addEventListener('click', saveGame);
-
-// Load saved game on page load
 loadGame();
 
+// Reset game
+function resetGame(){
+  if(confirm('Are you sure you want to reset the game? All progress will be lost.')){
+    money = 0;
+    cropIndex = 0;
+    cropColor = cropLevels[cropIndex].color;
+    wheatYield = cropLevels[cropIndex].yield;
+    growTime = 3000;
+    player.speed = 5;
+    upgradeLevels = { fasterGrowth:0, higherYield:0, fasterMovement:0, moreMoney:0 };
+    plots.forEach(plot => plot.hasWheat = true);
+    updateLevelUpButton();
+    for(const id in upgradeLevels){
+      updateUpgradeText(id, upgradeLevels[id]);
+    }
+    localStorage.removeItem('farmingSimSave');
+    alert('Game has been reset!');
+  }
+}
+resetButton.addEventListener('click', resetGame);
+
+// --- Mobile Joystick ---
+const joystickOuter = document.getElementById('joystickOuter');
+const joystickInner = document.getElementById('joystickInner');
+let joystickActive = false;
+let moveVector = { x:0, y:0 };
+
+joystickOuter.addEventListener('pointerdown', e => {
+  joystickActive = true;
+  updateJoystick(e);
+  joystickOuter.setPointerCapture(e.pointerId);
+});
+joystickOuter.addEventListener('pointermove', e => { if(joystickActive) updateJoystick(e); });
+joystickOuter.addEventListener('pointerup', e => {
+  joystickActive = false;
+  moveVector = { x:0, y:0 };
+  joystickInner.style.transform = 'translate(-50%, -50%)';
+});
+
+function updateJoystick(e){
+  const rect = joystickOuter.getBoundingClientRect();
+  const centerX = rect.left + rect.width/2;
+  const centerY = rect.top + rect.height/2;
+  let dx = e.clientX - centerX;
+  let dy = e.clientY - centerY;
+  const maxDist = rect.width/2 - joystickInner.offsetWidth/2;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  if(dist > maxDist){ dx = dx / dist * maxDist; dy = dy / dist * maxDist; }
+  joystickInner.style.transform = `translate(${dx}px, ${dy}px) translate(-50%, -50%)`;
+  moveVector.x = dx / maxDist;
+  moveVector.y = dy / maxDist;
+}
+
+// --- Game Loop ---
 function update(){
+  // Keyboard movement
   if(keys['ArrowLeft']||keys['a']) player.x-=player.speed;
   if(keys['ArrowRight']||keys['d']) player.x+=player.speed;
   if(keys['ArrowUp']||keys['w']) player.y-=player.speed;
   if(keys['ArrowDown']||keys['s']) player.y+=player.speed;
 
+  // Joystick movement
+  player.x += moveVector.x * player.speed;
+  player.y += moveVector.y * player.speed;
+
+  // Keep player in bounds
   player.x = Math.max(0,Math.min(canvas.width-player.size, player.x));
   player.y = Math.max(0,Math.min(canvas.height-player.size, player.y));
 
+  // Harvest plots
   plots.forEach(plot=>{
     if(plot.hasWheat && isColliding(player, plot)){
       plot.hasWheat=false;
@@ -241,11 +333,8 @@ function draw(){
       ctx.fillRect(plot.x+8,plot.y+8,plot.width-16,plot.height-16);
     }
   });
-
   ctx.fillStyle=player.color;
   ctx.fillRect(player.x,player.y,player.size,player.size);
-
-  // Money + current crop
   ctx.fillStyle='black';
   ctx.font='24px Arial';
   ctx.textAlign='right';
